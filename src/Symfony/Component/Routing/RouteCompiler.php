@@ -34,6 +34,7 @@ class RouteCompiler implements RouteCompilerInterface
         $tokens = array();
         $regex = null;
         $hostnameRegex = null;
+        $hostnameTokens = array();
 
         if (null !== $hostnamePattern = $route->getHostnamePattern()) {
 
@@ -42,6 +43,7 @@ class RouteCompiler implements RouteCompilerInterface
             $hostnameVariables = $result['variables'];
             $variables = array_merge($variables, $hostnameVariables);
 
+            $hostnameTokens = $result['tokens'];
             $hostnameRegex = $result['regex'];
         }
 
@@ -53,7 +55,7 @@ class RouteCompiler implements RouteCompilerInterface
         $pathVariables = $result['variables'];
         $variables = array_merge($variables, $pathVariables);
 
-        $tokens = array_merge($tokens, $result['tokens']);
+        $tokens = $result['tokens'];
         $regex = $result['regex'];
 
         return new CompiledRoute(
@@ -64,7 +66,8 @@ class RouteCompiler implements RouteCompilerInterface
             array_unique($variables),
             $pathVariables,
             $hostnameVariables,
-            $hostnameRegex
+            $hostnameRegex,
+            $hostnameTokens
         );
     }
 

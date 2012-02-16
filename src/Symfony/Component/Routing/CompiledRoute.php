@@ -26,20 +26,22 @@ class CompiledRoute
     private $pathVariables;
     private $hostnameVariables;
     private $hostnameRegex;
+    private $hostnameTokens;
 
     /**
      * Constructor.
      *
-     * @param Route  $route        A original Route instance
-     * @param string $staticPrefix The static prefix of the compiled route
-     * @param string $regex        The regular expression to use to match this route
-     * @param array  $tokens       An array of tokens to use to generate URL for this route
-     * @param array  $variables    An array of variables
+     * @param Route  $route             A original Route instance
+     * @param string $staticPrefix      The static prefix of the compiled route
+     * @param string $regex             The regular expression to use to match this route
+     * @param array  $tokens            An array of tokens to use to generate URL for this route
+     * @param array  $variables         An array of variables
      * @param array  $pathVariables     An array of path variables
      * @param array  $hostnameVariables An array of hostname variables
      * @param array  $hostnameRegex     Hostname regex
+     * @param array  $hostnameTokens    Hostname tokens
      */
-    public function __construct(Route $route, $staticPrefix, $regex, array $tokens, array $variables, array $pathVariables = array(), array $hostnameVariables = array(), $hostnameRegex = null)
+    public function __construct(Route $route, $staticPrefix, $regex, array $tokens, array $variables, array $pathVariables = array(), array $hostnameVariables = array(), $hostnameRegex = null, array $hostnameTokens = array())
     {
         $this->route = $route;
         $this->staticPrefix = $staticPrefix;
@@ -49,6 +51,7 @@ class CompiledRoute
         $this->pathVariables = $pathVariables;
         $this->hostnameVariables = $hostnameVariables;
         $this->hostnameRegex = $hostnameRegex;
+        $this->hostnameTokens = $hostnameTokens;
     }
 
     /**
@@ -99,6 +102,16 @@ class CompiledRoute
     public function getTokens()
     {
         return $this->tokens;
+    }
+
+    /**
+     * Returns the hostname tokens.
+     *
+     * @return array The tokens
+     */
+    public function getHostnameTokens()
+    {
+        return $this->hostnameTokens;
     }
 
     /**
