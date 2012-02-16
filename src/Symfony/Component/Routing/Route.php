@@ -25,6 +25,7 @@ class Route
     private $requirements;
     private $options;
     private $compiled;
+    private $hostnamePattern;
 
     static private $compilers = array();
 
@@ -39,15 +40,17 @@ class Route
      * @param array  $defaults      An array of default parameter values
      * @param array  $requirements  An array of requirements for parameters (regexes)
      * @param array  $options       An array of options
+     * @param string $hostname      The hostname pattern to match
      *
      * @api
      */
-    public function __construct($pattern, array $defaults = array(), array $requirements = array(), array $options = array())
+    public function __construct($pattern, array $defaults = array(), array $requirements = array(), array $options = array(), $hostnamePattern = null)
     {
         $this->setPattern($pattern);
         $this->setDefaults($defaults);
         $this->setRequirements($requirements);
         $this->setOptions($options);
+        $this->setHostnamePattern($hostnamePattern);
     }
 
     public function __clone()
@@ -82,6 +85,21 @@ class Route
         if (empty($this->pattern) || '/' !== $this->pattern[0]) {
             $this->pattern = '/'.$this->pattern;
         }
+
+        return $this;
+    }
+
+    public function getHostnamePattern()
+    {
+        return $this->hostnamePattern;
+    }
+
+    public function setHostnamePattern($pattern)
+    {
+        if ($this->hostnamePattern && !$pattern) {
+            throw new \Exception($this->hostnamePattern);
+        }
+        $this->hostnamePattern = $pattern;
 
         return $this;
     }

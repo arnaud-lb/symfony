@@ -29,6 +29,7 @@ class RouteCollection implements \IteratorAggregate
     private $resources;
     private $prefix;
     private $parent;
+    private $hostnamePattern;
 
     /**
      * Constructor.
@@ -40,6 +41,7 @@ class RouteCollection implements \IteratorAggregate
         $this->routes = array();
         $this->resources = array();
         $this->prefix = '';
+        $this->hostnamePattern = null;
     }
 
     public function __clone()
@@ -179,13 +181,19 @@ class RouteCollection implements \IteratorAggregate
      * @param string          $prefix       An optional prefix to add before each pattern of the route collection
      * @param array           $defaults     An array of default values
      * @param array           $requirements An array of requirements
+     * @param string          $hostnamePattern  Hostname pattern
      *
      * @api
      */
-    public function addCollection(RouteCollection $collection, $prefix = '', $defaults = array(), $requirements = array())
+    public function addCollection(RouteCollection $collection, $prefix = '', $defaults = array(), $requirements = array(), $hostnamePattern = null)
     {
         $collection->setParent($this);
         $collection->addPrefix($prefix, $defaults, $requirements);
+
+        // Allow child collection to have a different pattern
+        if (!$collection->getHostnamePattern()) {
+            $collection->setHostnamePattern($hostnamePattern);
+        }
 
         // remove all routes with the same name in all existing collections
         foreach (array_keys($collection->all()) as $name) {
@@ -258,4 +266,22 @@ class RouteCollection implements \IteratorAggregate
     {
         $this->resources[] = $resource;
     }
+
+    public function getHostnamePattern()
+    {
+        return $this->hostnamePattern;
+    }
+
+    public function setHostnamePattern($pattern)
+    {
+        $this->hostnamePattern = $pattern;
+
+        foreach ($this->routes as $name => $route) {
+            // Allow individual routes to have a different pattern
+            if (!$route->getHostnamePattern()) {
+                $route->setHostnamePattern($pattern);
+            }
+        }
+    }
+
 }
