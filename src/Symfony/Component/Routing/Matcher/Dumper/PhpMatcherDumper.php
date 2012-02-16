@@ -265,7 +265,7 @@ EOF;
                     $group['routes'][] = $routeInfo;
                     break;
 
-                } else if ('' !== $group['prefix'] && 0 === strpos($pattern, $group['prefix'])) {
+                } else if ('' !== $group['prefix'] && 0 === strpos($coll->getPrefix(), $group['prefix'])) {
                     $parent = $group;
                     $group = new \ArrayObject(array(
                         'prefix' => $coll->getPrefix(),
@@ -273,6 +273,10 @@ EOF;
                     ));
                     $parent['routes'][] = $group;
                     $groupStack[] = $group;
+                    $group['routes'][] = $routeInfo;
+                    break;
+
+                } else if ('' !== $group['prefix'] && 0 === strpos($pattern, $group['prefix'])) {
                     $group['routes'][] = $routeInfo;
                     break;
 
