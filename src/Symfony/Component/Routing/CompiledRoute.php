@@ -142,6 +142,16 @@ class CompiledRoute
     }
 
     /**
+     * Returns the hostname pattern.
+     *
+     * @return string The pattern
+     */
+    public function getHostnamePattern()
+    {
+        return $this->route->getHostnamePattern();
+    }
+
+    /**
      * Returns the options.
      *
      * @return array The options
