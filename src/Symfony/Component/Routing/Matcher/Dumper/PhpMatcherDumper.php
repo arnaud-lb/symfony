@@ -54,8 +54,7 @@ class PhpMatcherDumper extends MatcherDumper
 
     private function addMatcher($supportsRedirections)
     {
-        // we need to deep clone the routes as we will modify the structure to optimize the dump
-        $code = implode("\n", $this->compileRoutes(clone $this->getRoutes(), $supportsRedirections));
+        $code = implode("\n", $this->compileRoutes($this->getRoutes(), $supportsRedirections));
 
         return <<<EOF
 
@@ -71,74 +70,227 @@ $code
 EOF;
     }
 
-    private function compileRoutes(RouteCollection $routes, $supportsRedirections, $parentPrefix = null)
+    private function compileRoutes(RouteCollection $routes, $supportsRedirections)
     {
         $code = array();
+        $fetchedHostname = false;
+        $indent = '        ';
 
-        $routeIterator = $routes->getIterator();
-        $keys = array_keys($routeIterator->getArrayCopy());
-        $keysCount = count($keys);
+        $hostnameGroups = $this->groupRoutes($this->flattenRoutes($routes));
 
-        $i = 0;
-        foreach ($routeIterator as $name => $route) {
-            $i++;
+        foreach ($hostnameGroups as $group) {
 
-            if ($route instanceof RouteCollection) {
-                $prefix = $route->getPrefix();
-                $optimizable = $prefix && count($route->all()) > 1 && false === strpos($route->getPrefix(), '{');
-                $indent = '';
-                if ($optimizable) {
-                    for ($j = $i; $j < $keysCount; $j++) {
-                        if ($keys[$j] === null) {
-                            continue;
-                        }
+            if ($regex = $group['regex']) {
 
-                        $testRoute = $routeIterator->offsetGet($keys[$j]);
-                        $isCollection = ($testRoute instanceof RouteCollection);
-
-                        $testPrefix = $isCollection ? $testRoute->getPrefix() : $testRoute->getPattern();
-
-                        if (0 === strpos($testPrefix, $prefix)) {
-                            $routeIterator->offsetUnset($keys[$j]);
-
-                            if ($isCollection) {
-                                $route->addCollection($testRoute);
-                            } else {
-                                $route->add($keys[$j], $testRoute);
-                            }
-
-                            $i++;
-                            $keys[$j] = null;
-                        }
-                    }
-
-                    if ($prefix !== $parentPrefix) {
-                        $code[] = sprintf("        if (0 === strpos(\$pathinfo, %s)) {", var_export($prefix, true));
-                        $indent = '    ';
-                    }
+                if (!$fetchedHostname) {
+                    $code[] = sprintf("%s\$hostname = \$this->context->getHost();", $indent);
+                    $fetchedHostname = true;
                 }
 
-                foreach ($this->compileRoutes($route, $supportsRedirections, $prefix) as $line) {
-                    foreach (explode("\n", $line) as $l) {
-                        if ($l) {
-                            $code[] = $indent.$l;
-                        } else {
-                            $code[] = $l;
-                        }
-                    }
-                }
+                $regex = str_replace(array("\n", ' '), '', $regex);
 
-                if ($optimizable && $prefix !== $parentPrefix) {
-                    $code[] = "        }\n";
+                $code[] = sprintf("%sif (preg_match(%s, \$hostname, \$hostnameMatches)) {", $indent, var_export($regex, true));
+
+                $indent .= '    ';
+            }
+
+            foreach ($this->compilePrefixGroups($group['prefixGroups'], $supportsRedirections) as $line) {
+                if (trim($line)) {
+                    $code[] = $indent . $line;
+                } else {
+                    $code[] = '';
                 }
-            } else {
-                foreach ($this->compileRoute($route, $name, $supportsRedirections, $parentPrefix) as $line) {
-                    $code[] = $line;
-                }
+            }
+
+            if ($regex) {
+                $indent = substr($indent, 0, -4);
+                $code[] = sprintf("%s}", $indent);
             }
         }
 
         return $code;
+    }
+
+    /**
+     * Compiles an array of prefix groups (routes sharing the same prefix)
+     */
+    private function compilePrefixGroups($groups, $supportsRedirections)
+    {
+        $code = array();
+
+        $indent = '';
+
+        foreach ($groups as $group) {
+            $lines = $this->compilePrefixGroup($group, $supportsRedirections);
+            $code = array_merge($code, $lines);
+        }
+
+        return $code;
+    }
+
+    /**
+     * Compiles a group of routes sharing the same prefix
+     */
+    private function compilePrefixGroup($group, $supportsRedirections)
+    {
+        $code = array();
+
+        $indent = '';
+
+        if ($prefix = $group['prefix']) {
+            $code[] = sprintf("%sif (0 === strpos(\$pathinfo, %s)) {", $indent, var_export($prefix, true));
+            $indent = '    ';
+        }
+
+        foreach ($group['routes'] as $routeInfo) {
+
+            if (isset($routeInfo['routes'])) {
+                foreach ($this->compilePrefixGroup($routeInfo, $supportsRedirections) as $line) {
+                    $code[] = $indent . $line;
+                }
+            } else {
+
+                $route = $routeInfo['route'];
+                $name = $routeInfo['name'];
+
+                foreach ($this->compileRoute($route, $name, $supportsRedirections, $group['prefix']) as $line) {
+                    foreach (explode("\n", $line) as $line) {
+                        $code[] = $indent . substr($line, 8);
+                    }
+                }
+            }
+        }
+
+        if ($prefix) {
+            $code[] = "}";
+        }
+
+        return $code;
+    }
+
+    /**
+     * Flattens a tree of routes in a single array. Output is an array of "route
+     * info" arrays (an array with the route, its name and its parent collection
+     * ) in declaration order (the routes are added as the tree is traversed
+     * depth-first).
+     */
+    private function flattenRoutes(RouteCollection $routes, array &$bucket = array())
+    {
+        foreach ($routes as $name => $route) {
+            if ($route instanceof RouteCollection) {
+                $this->flattenRoutes($route, $bucket);
+            } else {
+                $bucket[] = array(
+                    'name' => $name,
+                    'route' => $route,
+                    'parent' => $routes,
+                );
+            }
+        }
+
+        return $bucket;
+    }
+
+    /**
+     * Groups sequences of routes having the same hostname pattern and hostname
+     * requirements, keeping original order.
+     *
+     * @param array $routes Array of routes returned by flattenRoutes()
+     */
+    private function groupRoutes(array $routes)
+    {
+        $groups = array();
+
+        // using ArrayObject to avoid playing with references
+        $group = new \ArrayObject(array(
+            'regex' => null,
+            'routes' => array(),
+        ));
+
+        $groups[] = $group;
+
+        foreach ($routes as $routeInfo) {
+
+            $route = $routeInfo['route'];
+            $regex = $route->compile()->getHostnameRegex();
+
+            if ($regex !== $group['regex']) {
+
+                $group = new \ArrayObject(array(
+                    'regex' => $regex,
+                    'routes' => array(),
+                ));
+
+                $groups[] = $group;
+            }
+
+            $group['routes'][] = $routeInfo;
+        }
+
+        foreach ($groups as $group) {
+            $group['prefixGroups'] = $this->groupRoutesByPrefix($group['routes']);
+        }
+
+        return $groups;
+    }
+
+    /**
+     * Organizes an array of routes into a tree of routes in which all childs of
+     * a node share the same prefix, keeping routes order (traversing the tree
+     * depth-first will visit each node in the original order of $routes).
+     */
+    private function groupRoutesByPrefix(array $routes)
+    {
+        $groups = array();
+
+        $group = new \ArrayObject(array(
+            'prefix' => '',
+            'routes' => array(),
+        ));
+
+        $groupStack = array();
+
+        $groups[] = $group;
+
+        foreach ($routes as $routeInfo) {
+
+            $route = $routeInfo['route'];
+            $coll = $routeInfo['parent'];
+
+            $pattern = $route->getPattern();
+
+            while (true) {
+
+                if ($group['prefix'] === $coll->getPrefix()) {
+                    $group['routes'][] = $routeInfo;
+                    break;
+
+                } else if ('' !== $group['prefix'] && 0 === strpos($pattern, $group['prefix'])) {
+                    $parent = $group;
+                    $group = new \ArrayObject(array(
+                        'prefix' => $coll->getPrefix(),
+                        'routes' => array(),
+                    ));
+                    $parent['routes'][] = $group;
+                    $groupStack[] = $group;
+                    $group['routes'][] = $routeInfo;
+                    break;
+
+                } else {
+                    $group = array_pop($groupStack);
+                    if (!$group) {
+                        $group = new \ArrayObject(array(
+                            'prefix' => $coll->getPrefix(),
+                            'routes' => array(),
+                        ));
+                        $groupStack[] = $group;
+                        $groups[] = $group;
+                    }
+                }
+            }
+        }
+
+        return $groups;
     }
 
     private function compileRoute(Route $route, $name, $supportsRedirections, $parentPrefix = null)
@@ -148,6 +300,7 @@ EOF;
         $conditions = array();
         $hasTrailingSlash = false;
         $matches = false;
+        $hostnameMatches = false;
         $methods = array();
         if ($req = $route->getRequirement('_method')) {
             $methods = explode('|', strtoupper($req));
@@ -158,7 +311,7 @@ EOF;
         }
         $supportsTrailingSlash = $supportsRedirections && (!$methods || in_array('HEAD', $methods));
 
-        if (!count($compiledRoute->getVariables()) && false !== preg_match('#^(.)\^(?P<url>.*?)\$\1#', str_replace(array("\n", ' '), '', $compiledRoute->getRegex()), $m)) {
+        if (!count($compiledRoute->getPathVariables()) && false !== preg_match('#^(.)\^(?P<url>.*?)\$\1#', str_replace(array("\n", ' '), '', $compiledRoute->getRegex()), $m)) {
             if ($supportsTrailingSlash && substr($m['url'], -1) === '/') {
                 $conditions[] = sprintf("rtrim(\$pathinfo, '/') === %s", var_export(rtrim(str_replace('\\', '', $m['url']), '/'), true));
                 $hasTrailingSlash = true;
@@ -178,6 +331,10 @@ EOF;
             $conditions[] = sprintf("preg_match(%s, \$pathinfo, \$matches)", var_export($regex, true));
 
             $matches = true;
+        }
+
+        if ($compiledRoute->getHostnameRegex()) {
+            $hostnameMatches = true;
         }
 
         $conditions = implode(' && ', $conditions);
@@ -231,12 +388,34 @@ EOF
         }
 
         // optimize parameters array
-        if (true === $matches && $compiledRoute->getDefaults()) {
-            $code[] = sprintf("            return array_merge(\$this->mergeDefaults(\$matches, %s), array('_route' => '%s'));"
-                , str_replace("\n", '', var_export($compiledRoute->getDefaults(), true)), $name);
-        } elseif (true === $matches) {
+
+        if (($matches || $hostnameMatches) && $compiledRoute->getDefaults()) {
+
+            $vars = array();
+            if ($matches) {
+                $vars[] = '$matches';
+            }
+            if ($hostnameMatches) {
+                $vars[] = '$hostnameMatches';
+            }
+            $matchesExpr = implode(' + ', $vars);
+
+            $code[] = sprintf("            return array_merge(\$this->mergeDefaults(%s, %s), array('_route' => '%s'));"
+                , $matchesExpr, str_replace("\n", '', var_export($compiledRoute->getDefaults(), true)), $name);
+
+        } elseif ($matches || $hostnameMatches) {
+
+            if (!$matches) {
+                $code[] = "            \$matches = \$hostnameMatches;";
+            } else {
+                if ($hostnameMatches) {
+                    $code[] = "            \$matches = \$matches + \$hostnameMatches;";
+                }
+            }
+
             $code[] = sprintf("            \$matches['_route'] = '%s';", $name);
             $code[] = sprintf("            return \$matches;", $name);
+
         } elseif ($compiledRoute->getDefaults()) {
             $code[] = sprintf('            return %s;', str_replace("\n", '', var_export(array_merge($compiledRoute->getDefaults(), array('_route' => $name)), true)));
         } else {
