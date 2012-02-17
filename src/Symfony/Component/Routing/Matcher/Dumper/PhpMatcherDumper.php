@@ -18,6 +18,7 @@ use Symfony\Component\Routing\RouteCollection;
  * PhpMatcherDumper creates a PHP class able to match URLs for a given set of routes.
  *
  * @author Fabien Potencier <fabien@symfony.com>
+ * @author Arnaud Le Blanc <arnaud.lb@gmail.com>
  */
 class PhpMatcherDumper extends MatcherDumper
 {
@@ -73,228 +74,68 @@ EOF;
     private function compileRoutes(RouteCollection $routes, $supportsRedirections)
     {
         $code = array();
-        $fetchedHostname = false;
-        $indent = '        ';
+        $indent = 0;
 
-        $hostnameGroups = $this->groupRoutes($this->flattenRoutes($routes));
+        $collections = $this->groupRoutesByHostnameRegex($routes)->getRoot();
 
-        foreach ($hostnameGroups as $group) {
+        foreach ($collections as $collection) {
 
-            if ($regex = $group['regex']) {
+            if ($regex = $collection->get('hostnameRegex')) {
 
-                if (!$fetchedHostname) {
-                    $code[] = sprintf("%s\$hostname = \$this->context->getHost();", $indent);
-                    $fetchedHostname = true;
-                }
+                $code[] = sprintf("if (preg_match(%s, \$hostname, \$hostnameMatches)) {", var_export(str_replace(array("\n", ' '), '', $regex), true));
 
-                $regex = str_replace(array("\n", ' '), '', $regex);
-
-                $code[] = sprintf("%sif (preg_match(%s, \$hostname, \$hostnameMatches)) {", $indent, var_export($regex, true));
-
-                $indent .= '    ';
+                $indent = 4;
             }
 
-            foreach ($this->compilePrefixGroups($group['prefixGroups'], $supportsRedirections) as $line) {
-                if (trim($line)) {
-                    $code[] = $indent . $line;
-                } else {
-                    $code[] = '';
-                }
-            }
+            $lines = $this->compileHostnameRoutes($collection, $supportsRedirections);
+            $code = array_merge($code, $this->indentCode($lines, $indent));
 
             if ($regex) {
-                $indent = substr($indent, 0, -4);
-                $code[] = sprintf("%s}", $indent);
+                $indent = 0;
+                $code[] = '}';
             }
         }
 
-        return $code;
+        return $this->indentCode($code, 8);
     }
 
-    /**
-     * Compiles an array of prefix groups (routes sharing the same prefix)
-     */
-    private function compilePrefixGroups($groups, $supportsRedirections)
+    private function compileHostnameRoutes(DumperCollection $collection, $supportsRedirections, $parentPrefix = '')
     {
         $code = array();
+        $indent = 0;
 
-        $indent = '';
+        $prefix = $collection->get('collection')->getPrefix();
 
-        foreach ($groups as $group) {
-            $lines = $this->compilePrefixGroup($group, $supportsRedirections);
-            $code = array_merge($code, $lines);
+        $optimizable = '' !== $prefix && false === strpos($prefix, '{');
+        $optimizable = $optimizable && $parentPrefix !== $prefix;
+
+        $optimizedPrefix = $parentPrefix;
+
+        if ($optimizable) {
+
+            $optimizedPrefix = $prefix;
+
+            $code[] = sprintf("if (0 === strpos(\$pathinfo, %s)) {", var_export($prefix, true));
+            $indent = 4;
+        }
+
+        foreach ($collection as $route) {
+            if ($route instanceof DumperCollection) {
+                $lines = $this->compileHostnameRoutes($route, $prefix);
+            } else {
+                $lines = $this->compileRoute($route->getRoute(), $route->getName(), $supportsRedirections, $optimizedPrefix);
+                $lines = $this->undentCode($lines, 8);
+            }
+            $code = array_merge($code, $this->indentCode($lines, $indent));
+        }
+
+        if ($optimizable) {
+            $indent = 0;
+            $code[] = '}';
+            $code[] = '';
         }
 
         return $code;
-    }
-
-    /**
-     * Compiles a group of routes sharing the same prefix
-     */
-    private function compilePrefixGroup($group, $supportsRedirections)
-    {
-        $code = array();
-
-        $indent = '';
-
-        if ($prefix = $group['prefix']) {
-            $code[] = sprintf("%sif (0 === strpos(\$pathinfo, %s)) {", $indent, var_export($prefix, true));
-            $indent = '    ';
-        }
-
-        foreach ($group['routes'] as $routeInfo) {
-
-            if (isset($routeInfo['routes'])) {
-                foreach ($this->compilePrefixGroup($routeInfo, $supportsRedirections) as $line) {
-                    $code[] = $indent . $line;
-                }
-            } else {
-
-                $route = $routeInfo['route'];
-                $name = $routeInfo['name'];
-
-                foreach ($this->compileRoute($route, $name, $supportsRedirections, $group['prefix']) as $line) {
-                    foreach (explode("\n", $line) as $line) {
-                        $code[] = $indent . substr($line, 8);
-                    }
-                }
-            }
-        }
-
-        if ($prefix) {
-            $code[] = "}";
-        }
-
-        return $code;
-    }
-
-    /**
-     * Flattens a tree of routes in a single array. Output is an array of "route
-     * info" arrays (an array with the route, its name and its parent collection
-     * ) in declaration order (the routes are added as the tree is traversed
-     * depth-first).
-     */
-    private function flattenRoutes(RouteCollection $routes, array &$bucket = array())
-    {
-        foreach ($routes as $name => $route) {
-            if ($route instanceof RouteCollection) {
-                $this->flattenRoutes($route, $bucket);
-            } else {
-                $bucket[] = array(
-                    'name' => $name,
-                    'route' => $route,
-                    'parent' => $routes,
-                );
-            }
-        }
-
-        return $bucket;
-    }
-
-    /**
-     * Groups sequences of routes having the same hostname pattern and hostname
-     * requirements, keeping original order.
-     *
-     * @param array $routes Array of routes returned by flattenRoutes()
-     */
-    private function groupRoutes(array $routes)
-    {
-        $groups = array();
-
-        // using ArrayObject to avoid playing with references
-        $group = new \ArrayObject(array(
-            'regex' => null,
-            'routes' => array(),
-        ));
-
-        $groups[] = $group;
-
-        foreach ($routes as $routeInfo) {
-
-            $route = $routeInfo['route'];
-            $regex = $route->compile()->getHostnameRegex();
-
-            if ($regex !== $group['regex']) {
-
-                $group = new \ArrayObject(array(
-                    'regex' => $regex,
-                    'routes' => array(),
-                ));
-
-                $groups[] = $group;
-            }
-
-            $group['routes'][] = $routeInfo;
-        }
-
-        foreach ($groups as $group) {
-            $group['prefixGroups'] = $this->groupRoutesByPrefix($group['routes']);
-        }
-
-        return $groups;
-    }
-
-    /**
-     * Organizes an array of routes into a tree of routes in which all childs of
-     * a node share the same prefix, keeping routes order (traversing the tree
-     * depth-first will visit each node in the original order of $routes).
-     */
-    private function groupRoutesByPrefix(array $routes)
-    {
-        $groups = array();
-
-        $group = new \ArrayObject(array(
-            'prefix' => '',
-            'routes' => array(),
-        ));
-
-        $groupStack = array();
-
-        $groups[] = $group;
-
-        foreach ($routes as $routeInfo) {
-
-            $route = $routeInfo['route'];
-            $coll = $routeInfo['parent'];
-
-            $pattern = $route->getPattern();
-
-            while (true) {
-
-                if ($group['prefix'] === $coll->getPrefix()) {
-                    $group['routes'][] = $routeInfo;
-                    break;
-
-                } else if ('' !== $group['prefix'] && 0 === strpos($coll->getPrefix(), $group['prefix'])) {
-                    $parent = $group;
-                    $group = new \ArrayObject(array(
-                        'prefix' => $coll->getPrefix(),
-                        'routes' => array(),
-                    ));
-                    $parent['routes'][] = $group;
-                    $groupStack[] = $group;
-                    $group['routes'][] = $routeInfo;
-                    break;
-
-                } else if ('' !== $group['prefix'] && 0 === strpos($pattern, $group['prefix'])) {
-                    $group['routes'][] = $routeInfo;
-                    break;
-
-                } else {
-                    $group = array_pop($groupStack);
-                    if (!$group) {
-                        $group = new \ArrayObject(array(
-                            'prefix' => $coll->getPrefix(),
-                            'routes' => array(),
-                        ));
-                        $groupStack[] = $group;
-                        $groups[] = $group;
-                    }
-                }
-            }
-        }
-
-        return $groups;
     }
 
     private function compileRoute(Route $route, $name, $supportsRedirections, $parentPrefix = null)
@@ -337,7 +178,7 @@ EOF;
             $matches = true;
         }
 
-        if ($compiledRoute->getHostnameRegex()) {
+        if ($compiledRoute->getHostnameVariables()) {
             $hostnameMatches = true;
         }
 
@@ -477,5 +318,135 @@ EOF;
 }
 
 EOF;
+    }
+
+    /**
+     * Removes the given number of spaces from the begining of each line
+     *
+     * @param  array $lines Array of lines
+     * @param  int   $width The number of spaces
+     * @return array Array of undented lines
+     */
+    private function undentCode(array $lines, $width)
+    {
+        $code = array();
+        $re = sprintf('#^ {0,%s}#', $width);
+
+        foreach ($lines as $line) {
+            foreach (explode("\n", $line) as $line) {
+                if (trim($line)) {
+                    $code[] = preg_replace($re, '', $line);
+                } else {
+                    $code[] = '';
+                }
+            }
+        }
+
+        return $code;
+    }
+
+    /**
+     * Prepends the given number of spaces at the begining of each line
+     *
+     * @param  array $lines Array of lines
+     * @param  int   $width The number of spaces
+     * @return array Array of indented lines
+     */
+    private function indentCode(array $lines, $width)
+    {
+        $code = array();
+        $indent = str_repeat(' ', $width);
+
+        foreach ($lines as $line) {
+            foreach (explode("\n", $line) as $line) {
+                if (trim($line)) {
+                    $code[] = $indent . $line;
+                } else {
+                    $code[] = '';
+                }
+            }
+        }
+
+        return $code;
+    }
+
+    /**
+     * Splits a tree of routes according to their hostname regex
+     *
+     * Traversing the resulting trees visits each route in the same order than
+     * visiting the original tree
+     *
+     * Given the following tree:
+     *
+     * coll1:
+     * |-route1 (a.example.com)
+     * |-coll2
+     * | |-route2 (a.example.com)
+     * | |-route3 (b.example.com)
+     * |-route4 (a.example.com)
+     * |-route5 (c.example.com)
+     *
+     * The result is:
+     *
+     * coll1:
+     * |-route1 (a.example.com)
+     * |-coll2
+     * | |-route2 (a.example.com)
+     *
+     * |-coll2
+     * | |-route3 (b.example.com)
+     *
+     * coll1:
+     * |-route4 (a.example.com)
+     *
+     * coll1:
+     * |-route5 (c.example.com)
+     *
+     */
+    private function groupRoutesByHostnameRegex(RouteCollection $routes, DumperCollection $root = null, DumperCollection $parent = null)
+    {
+
+        if (null === $root) {
+            $root = new DumperCollection();
+            $root->set('hostnameRegex', null);
+        }
+
+        if (null === $parent) {
+            $parent = $root;
+        }
+
+        $collection = new DumperCollection();
+        $collection->set('hostnameRegex', $parent->get('hostnameRegex'));
+        $collection->set('collection', $routes);
+
+        $parent->addRoute($collection);
+
+        foreach ($routes as $name => $route) {
+
+            if ($route instanceof RouteCollection) {
+
+                $collection = $this->groupRoutesByHostnameRegex($route, $root, $collection)->getParent();
+
+            } else {
+
+                $regex = $route->compile()->getHostnameRegex();
+
+                if ($regex !== $collection->get('hostnameRegex')) {
+
+                    $collection = $collection->cloneHierarchyUntil($root);
+                    $collection->set('collection', $routes);
+                    foreach ($collection->getParentsAndSelf() as $parent) {
+                        $parent->set('hostnameRegex', $regex);
+                    }
+
+                    $root->addRoute($collection->getRoot());
+                }
+
+                $collection->addRoute(new DumperRoute($name, $route, $routes));
+
+            }
+        }
+
+        return $collection;
     }
 }
