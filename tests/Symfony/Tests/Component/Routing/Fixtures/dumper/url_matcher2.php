@@ -176,6 +176,7 @@ class ProjectUrlMatcher extends Symfony\Tests\Component\Routing\Fixtures\Redirec
 
         }
 
+        $hostname = $this->context->getHost();
         if (preg_match('#^a\\.example\\.com$#xs', $hostname, $hostnameMatches)) {
             // route1
             if ($pathinfo === '/route1') {

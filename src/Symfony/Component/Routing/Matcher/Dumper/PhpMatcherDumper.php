@@ -78,9 +78,16 @@ EOF;
 
         $collections = $this->groupRoutesByHostnameRegex($routes)->getRoot();
 
+        $fetchedHostname = false;
+
         foreach ($collections as $collection) {
 
             if ($regex = $collection->get('hostnameRegex')) {
+
+                if (!$fetchedHostname) {
+                    $code[] = "\$hostname = \$this->context->getHost();";
+                    $fetchedHostname = true;
+                }
 
                 $code[] = sprintf("if (preg_match(%s, \$hostname, \$hostnameMatches)) {", var_export(str_replace(array("\n", ' '), '', $regex), true));
 
