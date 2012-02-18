@@ -94,7 +94,8 @@ EOF;
                 $indent = 4;
             }
 
-            $lines = $this->compileHostnameRoutes($collection, $supportsRedirections);
+            $collection = $this->buildPrefixTree($collection);
+            $lines = $this->compilePrefixRoutes($collection, $supportsRedirections);
             $code = array_merge($code, $this->indentCode($lines, $indent));
 
             if ($regex) {
@@ -106,15 +107,14 @@ EOF;
         return $this->indentCode($code, 8);
     }
 
-    private function compileHostnameRoutes(DumperCollection $collection, $supportsRedirections, $parentPrefix = '')
+    private function compilePrefixRoutes(DumperPrefixCollection $collection, $supportsRedirections, $parentPrefix = '')
     {
         $code = array();
         $indent = 0;
 
-        $prefix = $collection->get('collection')->getPrefix();
+        $prefix = $collection->getPrefix();
 
-        $optimizable = '' !== $prefix && false === strpos($prefix, '{');
-        $optimizable = $optimizable && $parentPrefix !== $prefix;
+        $optimizable = 1 < strlen($prefix) && 1 < count($collection->getRoutes());
 
         $optimizedPrefix = $parentPrefix;
 
@@ -128,7 +128,7 @@ EOF;
 
         foreach ($collection as $route) {
             if ($route instanceof DumperCollection) {
-                $lines = $this->compileHostnameRoutes($route, $prefix);
+                $lines = $this->compilePrefixRoutes($route, $supportsRedirections, $optimizedPrefix);
             } else {
                 $lines = $this->compileRoute($route->getRoute(), $route->getName(), $supportsRedirections, $optimizedPrefix);
                 $lines = $this->undentCode($lines, 8);
@@ -378,61 +378,29 @@ EOF;
     }
 
     /**
-     * Splits a tree of routes according to their hostname regex
+     * Groups consecutive routes having the same hostnameRegex
      *
-     * Traversing the resulting trees visits each route in the same order than
-     * visiting the original tree
-     *
-     * Given the following tree:
-     *
-     * coll1:
-     * |-route1 (a.example.com)
-     * |-coll2
-     * | |-route2 (a.example.com)
-     * | |-route3 (b.example.com)
-     * |-route4 (a.example.com)
-     * |-route5 (c.example.com)
-     *
-     * The result is:
-     *
-     * coll1:
-     * |-route1 (a.example.com)
-     * |-coll2
-     * | |-route2 (a.example.com)
-     *
-     * |-coll2
-     * | |-route3 (b.example.com)
-     *
-     * coll1:
-     * |-route4 (a.example.com)
-     *
-     * coll1:
-     * |-route5 (c.example.com)
-     *
+     * The results is a collection of collections of routes having the same
+     * hostnameRegex
      */
-    private function groupRoutesByHostnameRegex(RouteCollection $routes, DumperCollection $root = null, DumperCollection $parent = null)
+    private function groupRoutesByHostnameRegex(RouteCollection $routes, DumperCollection $root = null, DumperCollection $collection = null)
     {
-
         if (null === $root) {
             $root = new DumperCollection();
-            $root->set('hostnameRegex', null);
         }
 
-        if (null === $parent) {
-            $parent = $root;
+        if (null === $collection) {
+            $collection = new DumperCollection();
+            $collection->set('hostnameRegex', null);
+
+            $root->addRoute($collection);
         }
-
-        $collection = new DumperCollection();
-        $collection->set('hostnameRegex', $parent->get('hostnameRegex'));
-        $collection->set('collection', $routes);
-
-        $parent->addRoute($collection);
 
         foreach ($routes as $name => $route) {
 
             if ($route instanceof RouteCollection) {
 
-                $collection = $this->groupRoutesByHostnameRegex($route, $root, $collection)->getParent();
+                $collection = $this->groupRoutesByHostnameRegex($route, $root, $collection);
 
             } else {
 
@@ -440,13 +408,9 @@ EOF;
 
                 if ($regex !== $collection->get('hostnameRegex')) {
 
-                    $collection = $collection->cloneHierarchyUntil($root);
-                    $collection->set('collection', $routes);
-                    foreach ($collection->getParentsAndSelf() as $parent) {
-                        $parent->set('hostnameRegex', $regex);
-                    }
-
-                    $root->addRoute($collection->getRoot());
+                    $collection = new DumperCollection();
+                    $collection->set('hostnameRegex', $regex);
+                    $root->addRoute($collection);
                 }
 
                 $collection->addRoute(new DumperRoute($name, $route, $routes));
@@ -455,5 +419,24 @@ EOF;
         }
 
         return $collection;
+    }
+
+    /**
+     * Organizes the routes into a prefix tree
+     *
+     * Routes order is preserved such that traversing the tree will traverse the
+     * routes in the origin order
+     */
+    private function buildPrefixTree(DumperCollection $collection)
+    {
+        $tree = new DumperPrefixCollection;
+        $tree->setPrefix('');
+        $current = $tree;
+
+        foreach ($collection->getRoutes() as $route) {
+            $current = $current->addPrefixRoute($route);
+        }
+
+        return $tree;
     }
 }

@@ -263,11 +263,9 @@ class PhpMatcherDumperTest extends \PHPUnit_Framework_TestCase
             |-coll (null)
             |-coll ("#^a\\.example\\.com$#xs")
             | |-route1
-            | |-coll ("#^a\\.example\\.com$#xs")
-            | | |-route2
+            | |-route2
             |-coll ("#^b\\.example\\.com$#xs")
-            | |-coll ("#^b\\.example\\.com$#xs")
-            | | |-route3
+            | |-route3
             |-coll ("#^a\\.example\\.com$#xs")
             | |-route4
             |-coll ("#^c\\.example\\.com$#xs")

@@ -96,9 +96,6 @@ class Route
 
     public function setHostnamePattern($pattern)
     {
-        if ($this->hostnamePattern && !$pattern) {
-            throw new \Exception($this->hostnamePattern);
-        }
         $this->hostnamePattern = $pattern;
 
         return $this;
