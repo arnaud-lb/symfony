@@ -133,7 +133,7 @@ class XmlFileLoader extends FileLoader
                     throw new \InvalidArgumentException(sprintf('Unable to parse tag "%s"', $node->tagName));
             }
         }
-    			$hostname_pattern = $definition->getAttribute('hostname_pattern') ? $definition->getAttribute('hostname_pattern') : null;
+				$hostname_pattern = $definition->getAttribute('hostname_pattern') ? $definition->getAttribute('hostname_pattern') : null;
 				$route = new Route((string) $definition->getAttribute('pattern'), $defaults, $requirements, $options, $hostname_pattern);
 
         $collection->add((string) $definition->getAttribute('id'), $route);
