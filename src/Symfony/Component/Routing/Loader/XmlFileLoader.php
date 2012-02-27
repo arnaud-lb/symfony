@@ -76,29 +76,8 @@ class XmlFileLoader extends FileLoader
                 $resource = (string) $node->getAttribute('resource');
                 $type = (string) $node->getAttribute('type');
                 $prefix = (string) $node->getAttribute('prefix');
-
-                $defaults = array();
-                $requirements = array();
-
-                foreach ($node->childNodes as $n) {
-                    if (!$n instanceof \DOMElement) {
-                        continue;
-                    }
-
-                    switch ($n->tagName) {
-                        case 'default':
-                            $defaults[(string) $n->getAttribute('key')] = trim((string) $n->nodeValue);
-                            break;
-                        case 'requirement':
-                            $requirements[(string) $n->getAttribute('key')] = trim((string) $n->nodeValue);
-                            break;
-                        default:
-                            throw new \InvalidArgumentException(sprintf('Unable to parse tag "%s"', $n->tagName));
-                    }
-                }
-
                 $this->setCurrentDir(dirname($path));
-                $collection->addCollection($this->import($resource, ('' !== $type ? $type : null), false, $file), $prefix, $defaults, $requirements);
+                $collection->addCollection($this->import($resource, ('' !== $type ? $type : null), false, $file), $prefix);
                 break;
             default:
                 throw new \InvalidArgumentException(sprintf('Unable to parse tag "%s"', $node->tagName));
@@ -154,8 +133,8 @@ class XmlFileLoader extends FileLoader
                     throw new \InvalidArgumentException(sprintf('Unable to parse tag "%s"', $node->tagName));
             }
         }
-
-        $route = new Route((string) $definition->getAttribute('pattern'), $defaults, $requirements, $options);
+				$hostname_pattern = $definition->getAttribute('hostname_pattern') ? $definition->getAttribute('hostname_pattern') : null;
+				$route = new Route((string) $definition->getAttribute('pattern'), $defaults, $requirements, $options, $hostname_pattern);
 
         $collection->add((string) $definition->getAttribute('id'), $route);
     }
