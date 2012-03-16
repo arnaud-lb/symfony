@@ -57,7 +57,7 @@ class DateType extends AbstractType
             \Locale::getDefault(),
             $format,
             \IntlDateFormatter::NONE,
-            \DateTimeZone::UTC,
+            'UTC',
             \IntlDateFormatter::GREGORIAN,
             $pattern
         );
@@ -232,7 +232,7 @@ class DateType extends AbstractType
         $pattern = $formatter->getPattern();
         $timezone = $formatter->getTimezoneId();
 
-        $formatter->setTimezoneId(\DateTimeZone::UTC);
+        $formatter->setTimezoneId('UTC');
 
         if (preg_match('/M+/', $pattern, $matches)) {
             $formatter->setPattern($matches[0]);
