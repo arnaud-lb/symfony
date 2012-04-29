@@ -41,7 +41,7 @@ class ApacheUrlMatcher extends UrlMatcher
         foreach ($_SERVER as $key => $value) {
             $name = $key;
 
-            if (0 === strpos($name, 'REDIRECT_')) {
+            while (0 === strpos($name, 'REDIRECT_')) {
                 $name = substr($name, 9);
             }
 

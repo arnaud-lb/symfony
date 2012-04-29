@@ -104,6 +104,20 @@ class ApacheUrlMatcherTest extends \PHPUnit_Framework_TestCase
                     'name' => 'world',
                 ),
             ),
+            array(
+                'REDIRECT_REDIRECT_ envs',
+                '/hello/world',
+                array(
+                    'REDIRECT_REDIRECT__ROUTING__route' => 'hello',
+                    'REDIRECT_REDIRECT__ROUTING__controller' => 'AcmeBundle:Default:index',
+                    'REDIRECT_REDIRECT__ROUTING_name' => 'world',
+                ),
+                array(
+                    '_route' => 'hello',
+                    '_controller' => 'AcmeBundle:Default:index',
+                    'name' => 'world',
+                ),
+            ),
         );
     }
 }
