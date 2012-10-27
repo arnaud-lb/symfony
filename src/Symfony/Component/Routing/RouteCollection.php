@@ -42,7 +42,7 @@ class RouteCollection implements \IteratorAggregate, \Countable
         $this->routes = array();
         $this->resources = array();
         $this->prefix = '';
-        $this->hostnamePattern = null;
+        $this->hostnamePattern = '';
     }
 
     public function __clone()
@@ -185,18 +185,18 @@ class RouteCollection implements \IteratorAggregate, \Countable
     /**
      * Adds a route collection to the current set of routes (at the end of the current set).
      *
-     * @param RouteCollection $collection   A RouteCollection instance
-     * @param string          $prefix       An optional prefix to add before each pattern of the route collection
-     * @param array           $defaults     An array of default values
-     * @param array           $requirements An array of requirements
-     * @param array           $options      An array of options
-     * @param string          $hostnamePattern  Hostname pattern
+     * @param RouteCollection $collection      A RouteCollection instance
+     * @param string          $prefix          An optional prefix to add before each pattern of the route collection
+     * @param array           $defaults        An array of default values
+     * @param array           $requirements    An array of requirements
+     * @param array           $options         An array of options
+     * @param string          $hostnamePattern Hostname pattern
      *
      * @throws \InvalidArgumentException When the RouteCollection already exists in the tree
      *
      * @api
      */
-    public function addCollection(RouteCollection $collection, $prefix = '', $defaults = array(), $requirements = array(), $options = array(), $hostnamePattern = null)
+    public function addCollection(RouteCollection $collection, $prefix = '', $defaults = array(), $requirements = array(), $options = array(), $hostnamePrefix = null)
     {
         // prevent infinite loops by recursive referencing
         $root = $this->getRoot();
@@ -214,7 +214,7 @@ class RouteCollection implements \IteratorAggregate, \Countable
 
         // Allow child collection to have a different pattern
         if (!$collection->getHostnamePattern()) {
-            $collection->setHostnamePattern($hostnamePattern);
+            $collection->setHostnamePattern($hostnamePrefix);
         }
 
         $this->routes[] = $collection;

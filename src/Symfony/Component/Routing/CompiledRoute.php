@@ -74,7 +74,7 @@ class CompiledRoute
     /**
      * Returns the hostname regex
      *
-     * @return string The hostname regex
+     * @return string|null The hostname regex or null
      */
     public function getHostnameRegex()
     {

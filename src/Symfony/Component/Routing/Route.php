@@ -106,11 +106,21 @@ class Route implements \Serializable
         return $this;
     }
 
+    /**
+     * Returns the hostname pattern
+     *
+     * @return string|null the pattern or null if no pattern is set
+     */
     public function getHostnamePattern()
     {
         return $this->hostnamePattern;
     }
 
+    /**
+     * Sets the hostname pattern
+     *
+     * @param string $pattern the pattern
+     */
     public function setHostnamePattern($pattern)
     {
         $this->hostnamePattern = $pattern;
