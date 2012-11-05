@@ -190,7 +190,7 @@ class RouteCollection implements \IteratorAggregate, \Countable
      * @param array           $defaults        An array of default values
      * @param array           $requirements    An array of requirements
      * @param array           $options         An array of options
-     * @param string          $hostnamePattern Hostname pattern
+     * @param string|null     $hostnamePrefix  Hostname pattern
      *
      * @throws \InvalidArgumentException When the RouteCollection already exists in the tree
      *
@@ -266,6 +266,23 @@ class RouteCollection implements \IteratorAggregate, \Countable
     public function getPrefix()
     {
         return $this->prefix;
+    }
+
+    public function getHostnamePattern()
+    {
+        return $this->hostnamePattern;
+    }
+
+    public function setHostnamePattern($pattern)
+    {
+        $this->hostnamePattern = $pattern;
+
+        foreach ($this->routes as $name => $route) {
+            // Allow individual routes to have a different pattern
+            if (!$route->getHostnamePattern()) {
+                $route->setHostnamePattern($pattern);
+            }
+        }
     }
 
     /**
@@ -349,22 +366,5 @@ class RouteCollection implements \IteratorAggregate, \Countable
         }
 
         return false;
-    }
-
-    public function getHostnamePattern()
-    {
-        return $this->hostnamePattern;
-    }
-
-    public function setHostnamePattern($pattern)
-    {
-        $this->hostnamePattern = $pattern;
-
-        foreach ($this->routes as $name => $route) {
-            // Allow individual routes to have a different pattern
-            if (!$route->getHostnamePattern()) {
-                $route->setHostnamePattern($pattern);
-            }
-        }
     }
 }
