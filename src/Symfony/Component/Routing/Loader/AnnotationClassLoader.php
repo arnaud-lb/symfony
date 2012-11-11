@@ -153,9 +153,9 @@ abstract class AnnotationClassLoader implements LoaderInterface
             $name = $this->getDefaultRouteName($class, $method);
         }
 
-        $defaults = array_merge($globals['defaults'], $annot->getDefaults());
-        $requirements = array_merge($globals['requirements'], $annot->getRequirements());
-        $options = array_merge($globals['options'], $annot->getOptions());
+        $defaults = array_replace($globals['defaults'], $annot->getDefaults());
+        $requirements = array_replace($globals['requirements'], $annot->getRequirements());
+        $options = array_replace($globals['options'], $annot->getOptions());
 
         $hostnamePattern = $annot->getHostnamePattern();
         if (null === $hostnamePattern) {
