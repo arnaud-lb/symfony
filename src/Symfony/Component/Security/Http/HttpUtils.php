@@ -105,7 +105,7 @@ class HttpUtils
     {
         if ('/' !== $path[0]) {
             try {
-                $parameters = $this->router->match($request->getPathInfo());
+                $parameters = $this->router->match(urlencode($request->getPathInfo()));
 
                 return $path === $parameters['_route'];
             } catch (MethodNotAllowedException $e) {

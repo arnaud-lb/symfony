@@ -53,7 +53,7 @@ class RouterListener implements EventSubscriberInterface
 
         // add attributes based on the path info (routing)
         try {
-            $parameters = $this->urlMatcher->match($request->getPathInfo());
+            $parameters = $this->urlMatcher->match(urlencode($request->getPathInfo()));
 
             if (null !== $this->logger) {
                 $this->logger->info(sprintf('Matched route "%s" (parameters: %s)', $parameters['_route'], $this->parametersToString($parameters)));
