@@ -253,7 +253,7 @@ class ResponseHeaderBag extends HeaderBag
         $output = sprintf('%s; filename="%s"', $disposition, str_replace(array('\\', '"'), array('\\\\', '\\"'), $filenameFallback));
 
         if ($filename != $filenameFallback) {
-            $output .= sprintf("; filename*=utf-8''%s", rawurlencode($filename));
+            $output .= sprintf("; filename*=utf-8''%s", str_replace(array("'", '(', ')', '*'), array('%27', '%28', '%29', '%2A'), urlencode($filename)));
         }
 
         return $output;
