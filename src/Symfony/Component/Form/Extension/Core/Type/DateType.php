@@ -232,7 +232,7 @@ class DateType extends AbstractType
         $pattern = $formatter->getPattern();
         $timezone = $formatter->getTimezoneId();
 
-        $formatter->setTimezoneId('UTC');
+        $formatter->setTimezone('UTC');
 
         if (preg_match('/M+/', $pattern, $matches)) {
             $formatter->setPattern($matches[0]);
@@ -246,7 +246,7 @@ class DateType extends AbstractType
             $formatter->setPattern($pattern);
         }
 
-        $formatter->setTimezoneId($timezone);
+        $formatter->setTimezone($timezone);
 
         return $months;
     }
